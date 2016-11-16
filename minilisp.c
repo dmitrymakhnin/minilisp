@@ -10,18 +10,32 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void *ROOT_END = (void *)-1;
-
 // inputs: 
 //     root: pointer to env root.
 //     size: ?
 //     result: new node in the environment.
+/*
+This macro takes an environment pointer named root, and the number
+of pointers that the frame contains - 2 which are reserved for root
+pointer and terminator pointer, which uses -1 rather than 0 since
+0 is reserved for "null".
+
+It inline constructs an array of void pointers named root_ADD_ROOT, 
+then sets first index in the array to the root, all indeces but last
+to Nil(identity list), and the last index to NULL.
+
+
+ */
 #define ADD_ROOT(root, size)                          \
-    void *root_ADD_ROOT_[size + 2];             \
-    root_ADD_ROOT_[0] = root;                   \
-    for (int i = 1; i <= size; i++)             \
-        root_ADD_ROOT_[i] = NULL;               \
-    root_ADD_ROOT_[size + 1] = ROOT_END;        \
+    void *root_ADD_ROOT_[size + 2];                   \
+                                                      \
+    root_ADD_ROOT_[0] = root;                         \
+                                                      \
+    for (int i = 1; i <= size; i++) {                 \
+        root_ADD_ROOT_[i] = &Nil;                     \
+    }                                                 \
+                                                      \
+    root_ADD_ROOT_[size + 1] = NULL;                  \
     root = root_ADD_ROOT_
 
 // inline construction of a variable named var1 
@@ -277,7 +291,7 @@ static void forward_root_objects(void *root)
     void **frame = (void **)root;
 
     for (; frame; frame = *(void ***)frame) {
-        for (int i = 1; frame[i] != ROOT_END; ++i) {
+        for (int i = 1; frame[i] != NULL; ++i) {
             if (frame[i]) {
                 frame[i] = forward((Obj *)frame[i]);
             }
