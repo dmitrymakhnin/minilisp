@@ -11,6 +11,39 @@
 #include <string.h>
 #include <sys/mman.h>
 
+static void *ROOT_END = (void *)-1;
+
+#define ADD_ROOT(root, size)                          \
+    void *root_ADD_ROOT_[size + 2];             \
+    root_ADD_ROOT_[0] = root;                   \
+    for (int i = 1; i <= size; i++)             \
+        root_ADD_ROOT_[i] = NULL;               \
+    root_ADD_ROOT_[size + 1] = ROOT_END;        \
+    root = root_ADD_ROOT_
+
+#define DEFINE1(root, var1)                           \
+    ADD_ROOT(root, 1);                                \
+    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1)
+
+#define DEFINE2(root, var1, var2)                     \
+    ADD_ROOT(root, 2);                                \
+    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1);  \
+    Obj **var2 = (Obj **)(root_ADD_ROOT_ + 2)
+
+#define DEFINE3(root, var1, var2, var3)               \
+    ADD_ROOT(root, 3);                                \
+    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1);  \
+    Obj **var2 = (Obj **)(root_ADD_ROOT_ + 2);  \
+    Obj **var3 = (Obj **)(root_ADD_ROOT_ + 3)
+
+#define DEFINE4(root, var1, var2, var3, var4)         \
+    ADD_ROOT(root, 4);                                \
+    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1);  \
+    Obj **var2 = (Obj **)(root_ADD_ROOT_ + 2);  \
+    Obj **var3 = (Obj **)(root_ADD_ROOT_ + 3);  \
+    Obj **var4 = (Obj **)(root_ADD_ROOT_ + 4)
+
+
 static __attribute((noreturn)) void error(char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -75,7 +108,7 @@ typedef struct Obj {
             struct Obj *up;
         };
         // Forwarding pointer
-        void *moved;
+        struct Obj *moved;
     };
 } Obj;
 
@@ -138,37 +171,6 @@ static void gc(void *root);
 // to an object, it'll cause a subtle bug. Such code would work in most cases but fails with SEGV if
 // GC happens during the execution of the code. Any code that allocates memory may invoke GC.
 
-#define ROOT_END ((void *)-1)
-
-#define ADD_ROOT(root, size)                          \
-    void *root_ADD_ROOT_[size + 2];             \
-    root_ADD_ROOT_[0] = root;                   \
-    for (int i = 1; i <= size; i++)             \
-        root_ADD_ROOT_[i] = NULL;               \
-    root_ADD_ROOT_[size + 1] = ROOT_END;        \
-    root = root_ADD_ROOT_
-
-#define DEFINE1(root, var1)                           \
-    ADD_ROOT(root, 1);                                \
-    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1)
-
-#define DEFINE2(root, var1, var2)                     \
-    ADD_ROOT(root, 2);                                \
-    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1);  \
-    Obj **var2 = (Obj **)(root_ADD_ROOT_ + 2)
-
-#define DEFINE3(root, var1, var2, var3)               \
-    ADD_ROOT(root, 3);                                \
-    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1);  \
-    Obj **var2 = (Obj **)(root_ADD_ROOT_ + 2);  \
-    Obj **var3 = (Obj **)(root_ADD_ROOT_ + 3)
-
-#define DEFINE4(root, var1, var2, var3, var4)         \
-    ADD_ROOT(root, 4);                                \
-    Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1);  \
-    Obj **var2 = (Obj **)(root_ADD_ROOT_ + 2);  \
-    Obj **var3 = (Obj **)(root_ADD_ROOT_ + 3);  \
-    Obj **var4 = (Obj **)(root_ADD_ROOT_ + 4)
 
 // Round up the given value to a multiple of size. Size must be a power of 2. It adds size - 1
 // first, then zero-ing the least significant bits to make the result a multiple of size. I know
@@ -209,7 +211,7 @@ static Obj *alloc(void *root, int type, size_t size) {
         error("Memory exhausted");
 
     // Allocate the object.
-    Obj *obj = memory + mem_nused;
+    Obj *obj = ((Obj *)memory) + mem_nused;
     obj->type = type;
     obj->size = size;
     mem_nused += size;
@@ -259,12 +261,18 @@ static void *alloc_semispace() {
 }
 
 // Copies the root objects.
-static void forward_root_objects(void *root) {
+static void forward_root_objects(void *root) 
+{
     Symbols = forward(Symbols);
-    for (void **frame = root; frame; frame = *(void ***)frame)
-        for (int i = 1; frame[i] != ROOT_END; i++)
-            if (frame[i])
-                frame[i] = forward(frame[i]);
+    void **frame = (void **)root;
+
+    for (; frame; frame = *(void ***)frame) {
+        for (int i = 1; frame[i] != ROOT_END; ++i) {
+            if (frame[i]) {
+                frame[i] = forward((Obj *)frame[i]);
+            }
+        }
+    }
 }
 
 // Implements Cheney's copying garbage collection algorithm.
@@ -278,7 +286,8 @@ static void gc(void *root) {
     memory = alloc_semispace();
 
     // Initialize the two pointers for GC. Initially they point to the beginning of the to-space.
-    scan1 = scan2 = memory;
+    scan1 = (Obj *)memory;
+    scan2 = (Obj *)memory;
 
     // Copy the GC root objects first. This moves the pointer scan2.
     forward_root_objects(root);
