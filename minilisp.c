@@ -20,30 +20,19 @@ static __attribute((noreturn)) void error(char *fmt, ...) {
     exit(1);
 }
 
-//======================================================================
-// Lisp objects
-//======================================================================
-
-// The Lisp object type
 enum {
-    // Regular objects visible from the user
-    TINT = 1,
-    TCELL,
-    TPUNCHCARD,
-    TSYMBOL,
-    TPRIMITIVE,
-    TFUNCTION,
-    TMACRO,
-    TENV,
-    // The marker that indicates the object has been moved to other location by GC. The new location
-    // can be found at the forwarding pointer. Only the functions to do garbage collection set and
-    // handle the object of this type. Other functions will never see the object of this type.
-    TMOVED,
-    // Const objects. They are statically allocated and will never be managed by GC.
-    TTRUE,
-    TNIL,
-    TDOT,
-    TCPAREN
+    TINT,        
+    TCELL,       
+    TSYMBOL,     
+    TPRIMITIVE,  
+    TFUNCTION,   
+    TMACRO,      
+    TENV,        
+    TMOVED,      
+    TTRUE,       
+    TNIL,        
+    TDOT,        
+    TCPAREN     
 };
 
 // Typedef for the primitive function
