@@ -9,10 +9,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 
 static void *ROOT_END = (void *)-1;
 
+// inputs: 
+//     root: pointer to env root.
+//     size: ?
+//     result: new node in the environment.
 #define ADD_ROOT(root, size)                          \
     void *root_ADD_ROOT_[size + 2];             \
     root_ADD_ROOT_[0] = root;                   \
@@ -21,6 +24,8 @@ static void *ROOT_END = (void *)-1;
     root_ADD_ROOT_[size + 1] = ROOT_END;        \
     root = root_ADD_ROOT_
 
+// inline construction of a variable named var1 
+// bound to root.
 #define DEFINE1(root, var1)                           \
     ADD_ROOT(root, 1);                                \
     Obj **var1 = (Obj **)(root_ADD_ROOT_ + 1)
@@ -42,7 +47,6 @@ static void *ROOT_END = (void *)-1;
     Obj **var2 = (Obj **)(root_ADD_ROOT_ + 2);  \
     Obj **var3 = (Obj **)(root_ADD_ROOT_ + 3);  \
     Obj **var4 = (Obj **)(root_ADD_ROOT_ + 4)
-
 
 static __attribute((noreturn)) void error(char *fmt, ...) {
     va_list ap;
@@ -73,6 +77,12 @@ struct Obj;
 typedef struct Obj *Primitive(void *root, struct Obj **env, struct Obj **args);
 
 // The object type
+
+/** 
+ * vars, up:
+ *     vars is the linked list of variables in the environment frame.
+ *     up is the link to the superframe, or null(?).
+ */
 typedef struct Obj {
     // The first word of the object represents the type of the object. Any code that handles object
     // needs to check its type first, then access the following union members.
@@ -369,7 +379,17 @@ static Obj *make_function(void *root, Obj **env, int type, Obj **params, Obj **b
     return r;
 }
 
-struct Obj *make_env(void *root, Obj **vars, Obj **up) {
+/**
+ * inputs:
+ *     root: the environment.
+ *     vars: initial linked list to use for env.
+ *     up: superframe, nil if none.
+ *
+ * outputs: 
+ *     an environment frame Obj on the gc heap. 
+ */
+static Obj *make_env(void *root, Obj **vars, Obj **up) 
+{
     Obj *r = alloc(root, TENV, sizeof(Obj *) * 2);
     r->vars = *vars;
     r->up = *up;
@@ -378,6 +398,7 @@ struct Obj *make_env(void *root, Obj **vars, Obj **up) {
 
 // Returns ((x . y) . a)
 static Obj *acons(void *root, Obj **x, Obj **y, Obj **a) {
+    // create a node named cell bound to environment root.
     DEFINE1(root, cell);
     *cell = cons(root, x, y);
     return cons(root, cell, a);
@@ -570,6 +591,7 @@ static int length(Obj *list) {
 
 static Obj *eval(void *root, Obj **env, Obj **obj);
 
+// inline constructs vars, tmp.
 static void add_variable(void *root, Obj **env, Obj **sym, Obj **val) {
     DEFINE2(root, vars, tmp);
     *vars = (*env)->vars;
@@ -987,6 +1009,8 @@ int main(int argc, char **argv) {
     // Constants and primitives
     Symbols = Nil;
     void *root = NULL;
+
+    // allocate two objects on the heap named env, expr.
     DEFINE2(root, env, expr);
     *env = make_env(root, &Nil, &Nil);
     define_constants(root, env);
